@@ -4,7 +4,7 @@ import pygame
 mixer = pygame.mixer
 mixer.init()
 #win = mixer.Sound('data/sounds/win.wav')
-SPEED = 100
+SPEED = 300
 PING = 0
 DISTANCE_FROM_TARGET = 2000
 MAX_AIMED_DISTANCE = 3000
@@ -71,12 +71,13 @@ class Camera:
         obj.rect.y = obj.origin_y + self.dy
 
     def update(self, target):
-        self.dx = -(target.origin_x + target.rect.w // 2 - WIDTH // 2) #150
+        self.dx = -(target.origin_x + target.rect.w // 2 - WIDTH * RENDER_WIDTH_PERCENT // 200) #150
         self.dy = -(target.origin_y + target.rect.h // 2 - HEIGHT // 2) #+50
 
 
 tank_image = load_image('tank.png', -1)
 rocket_image = load_image('rocket.png', -1)
+aim_image = load_image('aim.png', -1)
 
 
 class ROCKET(Sprite):
@@ -109,6 +110,17 @@ class TANK(Sprite):
         self.origin_x, self.origin_y, = 0, 0
 
 
+class AIM(Sprite):
+    def __init__(self):
+        super().__init__((all_sprites, aim_group))
+        self.image = aim_image
+        self.x, self.y, self.z = 0, 0, 0
+        self.rect = pygame.Rect(0, 0,
+                                self.image.get_width(),
+                                self.image.get_height()).move(self.x, self.y)
+        self.origin_x, self.origin_y, = 0, 0
+
+
 def draw_text(text, text_coord_y, text_coord_x, size_font, color):
     font = pygame.font.Font(None, size_font)
     for line in text:
@@ -121,8 +133,13 @@ def draw_text(text, text_coord_y, text_coord_x, size_font, color):
         screen.blit(string_rendered, _rect)
 
 
-def render(rocket, tank, camera):
-    #global tank, rocket, camera
+def get_coords_on_screen(RATIO, camera, object_rect, HEIGHT):
+    x = object_rect.x + object_rect.width // 2
+    y = camera.y * RATIO + HEIGHT // 2 + object_rect.height // 2
+    return x, y
+
+
+def render(rocket, tank, camera, aim):
     tick = clock.tick(FPS)
     ######################### POSITIONS
     rocket.z += rocket.SPEED / tick
@@ -172,11 +189,18 @@ def render(rocket, tank, camera):
     tank.origin_y = -tank.rect.height // 2
     tank.origin_x = -tank.rect.width // 2
 
-    tank.origin_y += (rocket.y - tank.y) * RATIO
-    tank.origin_x += RATIO * (tank.x - rocket.x)
+    tank.origin_y += (camera.y - tank.y) * RATIO
+    tank.origin_x += RATIO * (tank.x - camera.x)
 
     rocket.origin_x = -rocket.rect.width // 2
     rocket.origin_y = -rocket.rect.height // 2
+
+    Mouse_x, Mouse_y = pygame.mouse.get_pos()
+    aim.origin_x, aim.origin_y = Mouse_x, Mouse_y
+    #Mouse_hit =
+    #Mouse_hit_x, Mouse_hit_y = (int((Mouse_x / RATIO) - camera.x), 0)
+    #aim.x
+
 
     camera.update(rocket)
 
@@ -184,15 +208,16 @@ def render(rocket, tank, camera):
         camera.apply(sprite)
     rad = 50 * (1 - (abs(camera.z - tank.z) /
                      sqrt(abs(camera.z - tank.z)**2 + abs(camera.y - tank.y)**2)))
+    shadow = get_coords_on_screen(RATIO, camera, tank.rect, HEIGHT)
     pygame.draw.ellipse(screen,
                         (00, 100, 00),
-                        (tank.rect.x,
-                         int((camera.y - rad / 2) * RATIO) + HEIGHT // 2 + tank.rect.height // 2,
+                        (shadow[0] - tank.rect.width // 2,
+                         shadow[1],
                          tank.rect.width,
-                         int(rad * RATIO)),
-                        int(rad / 2 * RATIO))
+                         int(rad * RATIO * 2)))
     tank_group.draw(screen)
     rocket_group.draw(screen)
+    aim_group.draw(screen)
 
 
 class ScreenFrame(pygame.sprite.Sprite):
@@ -204,11 +229,13 @@ class ScreenFrame(pygame.sprite.Sprite):
 all_sprites = pygame.sprite.Group()
 rocket_group = pygame.sprite.Group()
 tank_group = pygame.sprite.Group()
+aim_group = pygame.sprite.Group()
 
 
 running = True
 rocket = None
 tank = None
+aim = None
 camera = Camera()
 while running:
     if not rocket:
@@ -216,6 +243,8 @@ while running:
         rocket.y = 120
     if not tank:
         tank = TANK(DISTANCE_FROM_TARGET, TANK_SIZE)
+    if not aim:
+        aim = AIM()
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
@@ -230,7 +259,7 @@ while running:
                rocket.x += 40
     if rocket.z > tank.z or rocket.y < 0:
         running = False
-    render(rocket, tank, camera)
+    render(rocket, tank, camera, aim)
     pygame.display.flip()
     clock.tick(FPS)
 pygame.quit()
