@@ -64,7 +64,7 @@ class Camera:
     def __init__(self):
         self.dx = 0
         self.dy = 0
-        self.z = 0
+        self.x, self.y, self.z = 0, 0, 0
 
     def apply(self, obj):
         obj.rect.x = obj.origin_x + self.dx
@@ -124,11 +124,22 @@ def draw_text(text, text_coord_y, text_coord_x, size_font, color):
 def render(rocket, tank, camera):
     #global tank, rocket, camera
     tick = clock.tick(FPS)
+    ######################### POSITIONS
     rocket.z += rocket.SPEED / tick
-    screen.fill(pygame.Color('light blue'), (0, 0, WIDTH * RENDER_WIDTH_PERCENT / 100, HEIGHT))
-    screen.fill(pygame.Color('dark green'), (0, HEIGHT // 2, WIDTH * RENDER_WIDTH_PERCENT / 100,
-                                             HEIGHT - HEIGHT / 2))
-        ###################
+    camera.z = rocket.z - 100
+    camera.x, camera.y = rocket.x, rocket.y
+    ######################### BG
+    screen.fill(pygame.Color('light blue'), (0, 0,
+                                             WIDTH * RENDER_WIDTH_PERCENT / 100, HEIGHT))
+    num = 2000 + int(tank.z - camera.z)
+    for i in range(0, num, 3):
+        c = (int(i*255/num) + 200) // 2
+        RATIO_TO_LINES = 1000 / abs(num-i)
+        screen.fill((0, c, 0), (0, camera.y * RATIO_TO_LINES + HEIGHT / 2,
+                                WIDTH * RENDER_WIDTH_PERCENT / 100, 100))
+    screen.fill((0, 255, 0), (0, camera.y * 1000 + HEIGHT / 2,
+                            WIDTH * RENDER_WIDTH_PERCENT / 100, HEIGHT))
+    ################### UI
     ui_size_x = WIDTH - WIDTH * (1 - (RENDER_WIDTH_PERCENT / 100))
     screen.fill(pygame.Color("white"), (ui_size_x, 0, WIDTH, HEIGHT))
     rects = {}
@@ -153,21 +164,22 @@ def render(rocket, tank, camera):
     draw_text(["РАССТОЯНИЕ ДО ЦЕЛИ: " + str(int(tank.z - rocket.z))], 10,
               30,
               60, pygame.Color('red'))
-        ###################
-    camera.z = rocket.z - 100
+    ################### SCREEN POSITIONING
     RATIO = 1000 / abs(camera.z - tank.z)
     tank.image = pygame.transform.scale(tank.source_image,
                                         (int(tank.img_size[0] * RATIO / 10),
                                          int(tank.img_size[1] * RATIO / 10)))
+
     tank.rect.update(0, 0, tank.image.get_width(), tank.image.get_height())
     tank.origin_y = -tank.rect.height // 2
     tank.origin_x = -tank.rect.width // 2
-    print(tank.y)
+
     tank.origin_y += (rocket.y - tank.y) * RATIO
     tank.origin_x += RATIO * (tank.x - rocket.x)
+
     rocket.origin_x = -rocket.rect.width // 2
     rocket.origin_y = -rocket.rect.height // 2
-    print(rocket.x, rocket.y)
+
     camera.update(rocket)
     for sprite in all_sprites:
         camera.apply(sprite)
@@ -193,6 +205,7 @@ camera = Camera()
 while running:
     if not rocket:
         rocket = ROCKET(SPEED, PING, MAX_AIMED_DISTANCE, CORRECTION_SPEED, ROTATION_SPEED)
+        rocket.y = 100
     if not tank:
         tank = TANK(DISTANCE_FROM_TARGET, TANK_SIZE)
     for event in pygame.event.get():
@@ -207,7 +220,7 @@ while running:
                rocket.x -= 40
             if event.key == pygame.K_RIGHT:
                rocket.x += 40
-    if rocket.z > tank.z:# or rocket.y < 0:
+    if rocket.z > tank.z or rocket.y < 0:
         running = False
     render(rocket, tank, camera)
     pygame.display.flip()
