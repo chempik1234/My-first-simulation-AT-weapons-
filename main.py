@@ -1,10 +1,10 @@
 import os
-import sys
+from math import sqrt
 import pygame
 mixer = pygame.mixer
 mixer.init()
 #win = mixer.Sound('data/sounds/win.wav')
-SPEED = 600
+SPEED = 100
 PING = 0
 DISTANCE_FROM_TARGET = 2000
 MAX_AIMED_DISTANCE = 3000
@@ -132,13 +132,11 @@ def render(rocket, tank, camera):
     screen.fill(pygame.Color('light blue'), (0, 0,
                                              WIDTH * RENDER_WIDTH_PERCENT / 100, HEIGHT))
     num = 2000 + int(tank.z - camera.z)
-    for i in range(0, num, 3):
+    for i in range(0, num, 10):
         c = (int(i*255/num) + 200) // 2
         RATIO_TO_LINES = 1000 / abs(num-i)
         screen.fill((0, c, 0), (0, camera.y * RATIO_TO_LINES + HEIGHT / 2,
-                                WIDTH * RENDER_WIDTH_PERCENT / 100, 100))
-    screen.fill((0, 255, 0), (0, camera.y * 1000 + HEIGHT / 2,
-                            WIDTH * RENDER_WIDTH_PERCENT / 100, HEIGHT))
+                                WIDTH * RENDER_WIDTH_PERCENT / 100, HEIGHT // 2))
     ################### UI
     ui_size_x = WIDTH - WIDTH * (1 - (RENDER_WIDTH_PERCENT / 100))
     screen.fill(pygame.Color("white"), (ui_size_x, 0, WIDTH, HEIGHT))
@@ -181,8 +179,18 @@ def render(rocket, tank, camera):
     rocket.origin_y = -rocket.rect.height // 2
 
     camera.update(rocket)
+
     for sprite in all_sprites:
         camera.apply(sprite)
+    rad = 50 * (1 - (abs(camera.z - tank.z) /
+                     sqrt(abs(camera.z - tank.z)**2 + abs(camera.y - tank.y)**2)))
+    pygame.draw.ellipse(screen,
+                        (00, 100, 00),
+                        (tank.rect.x,
+                         int((camera.y - rad / 2) * RATIO) + HEIGHT // 2 + tank.rect.height // 2,
+                         tank.rect.width,
+                         int(rad * RATIO)),
+                        int(rad / 2 * RATIO))
     tank_group.draw(screen)
     rocket_group.draw(screen)
 
@@ -205,7 +213,7 @@ camera = Camera()
 while running:
     if not rocket:
         rocket = ROCKET(SPEED, PING, MAX_AIMED_DISTANCE, CORRECTION_SPEED, ROTATION_SPEED)
-        rocket.y = 100
+        rocket.y = 120
     if not tank:
         tank = TANK(DISTANCE_FROM_TARGET, TANK_SIZE)
     for event in pygame.event.get():
