@@ -4,12 +4,12 @@ import pygame
 mixer = pygame.mixer
 mixer.init()
 #win = mixer.Sound('data/sounds/win.wav')
-SPEED = 300
+SPEED = 100
 PING = 0
 DISTANCE_FROM_TARGET = 2000
 MAX_AIMED_DISTANCE = 3000
-ROTATION_SPEED = 100
-CORRECTION_SPEED = 100
+ROTATION_SPEED = 50
+CORRECTION_SPEED = 0.0001
 TANK_SIZE = 1
 
 WIDTH = 1280
@@ -84,7 +84,8 @@ class ROCKET(Sprite):
     def __init__(self, SPEED, PING, MAX_AIMED_DISTANCE, ROTATION_SPEED,
                  CORRECTION_SPEED):
         super().__init__((all_sprites, rocket_group))
-        self.image = rocket_image
+        self.source_image = rocket_image
+        self.image = self.source_image
         self.SPEED = SPEED
         self.PING = PING
         self.MAX_AIMED_DISTANCE = MAX_AIMED_DISTANCE
@@ -93,6 +94,12 @@ class ROCKET(Sprite):
         self.x, self.y, self.z = 0, 0, 0
         self.rect = pygame.Rect(0, 0, self.image.get_width(), self.image.get_height()).move(self.x, self.y)
         self.origin_x, self.origin_y, self.origin_z = 0, 0, 0
+        self.angle = 0  # 90 - up & down 0 - left & right
+        self.AD, self.WS, self.CHOOSING = 0, 1, 2
+        self.direction = self.CHOOSING
+
+    def rotate(self, angle_add):
+        self.angle = min(max(0, angle_add + self.angle), 90)
 
 
 class TANK(Sprite):
@@ -114,11 +121,13 @@ class AIM(Sprite):
     def __init__(self):
         super().__init__((all_sprites, aim_group))
         self.image = aim_image
-        self.x, self.y, self.z = 0, 0, 0
+        #self.x, self.y, self.z = 0, 0, 0
+        self.origin_x, self.origin_y, = 0, 0
         self.rect = pygame.Rect(0, 0,
                                 self.image.get_width(),
-                                self.image.get_height()).move(self.x, self.y)
-        self.origin_x, self.origin_y, = 0, 0
+                                self.image.get_height()).move(self.origin_x - (self.image.get_width() +
+                                                                               WIDTH * RENDER_WIDTH_PERCENT / 100) // 2,
+                                                              self.origin_y - (self.image.get_height() + HEIGHT) // 2)
 
 
 def draw_text(text, text_coord_y, text_coord_x, size_font, color):
@@ -140,7 +149,6 @@ def get_coords_on_screen(RATIO, camera, object_rect, HEIGHT):
 
 
 def render(rocket, tank, camera, aim):
-    tick = clock.tick(FPS)
     ######################### POSITIONS
     rocket.z += rocket.SPEED / tick
     camera.z = rocket.z - 100
@@ -176,9 +184,10 @@ def render(rocket, tank, camera, aim):
                     i.x + i.w * 0.1,
                     text_font, pygame.Color('white'))
 
-    draw_text(["РАССТОЯНИЕ ДО ЦЕЛИ: " + str(int(tank.z - rocket.z))], 10,
+    draw_text(["РАССТОЯНИЕ ДО ЦЕЛИ: " + str(int(tank.z - rocket.z)),
+               "X, Y: " + str(int(rocket.x)) + " " + str(int(rocket.y))], 10,
               30,
-              60, pygame.Color('red'))
+              20, pygame.Color('red'))
     ################### SCREEN POSITIONING
     RATIO = 1000 / abs(camera.z - tank.z)
     tank.image = pygame.transform.scale(tank.source_image,
@@ -196,14 +205,10 @@ def render(rocket, tank, camera, aim):
     rocket.origin_y = -rocket.rect.height // 2
 
     Mouse_x, Mouse_y = pygame.mouse.get_pos()
-    aim.origin_x, aim.origin_y = Mouse_x, Mouse_y
-    #Mouse_hit =
-    #Mouse_hit_x, Mouse_hit_y = (int((Mouse_x / RATIO) - camera.x), 0)
-    #aim.x
-
-
+    aim.origin_x, aim.origin_y = Mouse_x - (aim.image.get_width() + WIDTH * RENDER_WIDTH_PERCENT / 100) // 2, \
+                                 Mouse_y - (aim.image.get_height() + HEIGHT) // 2
+    rocket.image = pygame.transform.rotate(rocket.source_image, rocket.angle)
     camera.update(rocket)
-
     for sprite in all_sprites:
         camera.apply(sprite)
     rad = 50 * (1 - (abs(camera.z - tank.z) /
@@ -216,8 +221,8 @@ def render(rocket, tank, camera, aim):
                          tank.rect.width,
                          int(rad * RATIO * 2)))
     tank_group.draw(screen)
-    rocket_group.draw(screen)
     aim_group.draw(screen)
+    rocket_group.draw(screen)
 
 
 class ScreenFrame(pygame.sprite.Sprite):
@@ -238,6 +243,7 @@ tank = None
 aim = None
 camera = Camera()
 while running:
+    tick = clock.tick(FPS)
     if not rocket:
         rocket = ROCKET(SPEED, PING, MAX_AIMED_DISTANCE, CORRECTION_SPEED, ROTATION_SPEED)
         rocket.y = 120
@@ -257,6 +263,36 @@ while running:
                rocket.x -= 40
             if event.key == pygame.K_RIGHT:
                rocket.x += 40
+    aim_screen_x, aim_screen_y = aim.origin_x + aim.image.get_width() // 2,\
+                                 aim.origin_y + aim.image.get_height() // 2
+    rocket_screen_x, rocket_screen_y = rocket.origin_x + rocket.image.get_width() // 2,\
+                                       rocket.origin_y + rocket.image.get_height() // 2
+    dif = (abs(rocket_screen_x - aim_screen_x) / WIDTH / RENDER_WIDTH_PERCENT * 100,
+           abs(rocket_screen_y - aim_screen_y) / HEIGHT)
+    if dif[0] - dif[1] > 0.01:
+        if rocket.angle != 0 and rocket.direction != rocket.WS:
+            rocket.rotate(-abs(ROTATION_SPEED) / tick)
+            rocket.direction = rocket.AD
+        elif rocket.angle == 0 and rocket.direction == rocket.AD:
+            if rocket_screen_x > aim_screen_x:
+                rocket.x -= CORRECTION_SPEED * abs(rocket.origin_x - aim_screen_x) * WIDTH * RENDER_WIDTH_PERCENT // 100
+            elif rocket_screen_x < aim_screen_x:
+                rocket.x += CORRECTION_SPEED * abs(rocket.origin_x - aim_screen_x) * WIDTH * RENDER_WIDTH_PERCENT // 100
+            else:
+                rocket.direction = rocket.CHOOSING
+    elif dif[1] - dif[0] > 0.01:
+        if rocket.angle != 90 and rocket.direction != rocket.AD:
+            rocket.rotate(abs(ROTATION_SPEED) / tick)
+            rocket.direction = rocket.WS
+        elif rocket.angle == 90 and rocket.direction == rocket.WS:
+            if rocket_screen_y < aim_screen_y:
+                rocket.y -= CORRECTION_SPEED * abs(rocket.origin_y - aim_screen_y) * HEIGHT
+            elif rocket_screen_y > aim_screen_y:
+                rocket.y += CORRECTION_SPEED * abs(rocket.origin_y - aim_screen_y) * HEIGHT
+            else:
+                rocket.direction = rocket.CHOOSING
+    else:
+        rocket.direction = rocket.CHOOSING
     if rocket.z > tank.z or rocket.y < 0:
         running = False
     render(rocket, tank, camera, aim)
